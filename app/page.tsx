@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { DashboardState } from "@/lib/types";
+import type { DashboardState, RefreshJob } from "@/lib/types";
 import { mockDashboardState } from "@/lib/mockData";
 import { runRefresh } from "@/lib/pipeline";
 
@@ -27,17 +27,32 @@ export default function DashboardPage() {
   const handleRefresh = async (q: DashboardQuery) => {
     setIsRefreshing(true);
     setError(null);
+    let latestJob: RefreshJob | undefined;
+    const onProgress = (job: RefreshJob) => {
+      latestJob = job;
+      // Stream stage updates into state so the Debug panel reflects what's
+      // happening in real time, including resolver/discovery telemetry.
+      setState((s) => ({ ...s, lastRefresh: job }));
+    };
     try {
-      const { state: next } = await runRefresh({
-        company: q.company,
-        ticker: q.ticker,
-        fiscalYear: q.fiscalYear,
-      });
+      const { state: next } = await runRefresh(
+        {
+          company: q.company,
+          ticker: q.ticker,
+          fiscalYear: q.fiscalYear,
+        },
+        onProgress,
+      );
       setState(next);
       setHasLive(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      // Keep previous state visible for context.
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      // Make sure the last job (with its debug + errors) ends up in state so
+      // the Debug panel shows what failed, instead of stale mock data.
+      if (latestJob) {
+        setState((s) => ({ ...s, lastRefresh: latestJob }));
+      }
     } finally {
       setIsRefreshing(false);
     }

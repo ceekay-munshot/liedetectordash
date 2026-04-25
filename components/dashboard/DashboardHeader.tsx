@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -29,6 +29,19 @@ export function DashboardHeader({
   const [name, setName] = useState(company.name);
   const [ticker, setTicker] = useState(company.ticker);
   const [fiscalYear, setFiscalYear] = useState(company.fiscalYear);
+
+  // Re-sync inputs whenever the parent's resolved profile changes (e.g., after
+  // a successful refresh resolves "infy" -> "INFOSYS LTD"), so the user sees
+  // the canonical resolved values reflected in the header inputs.
+  useEffect(() => {
+    setName(company.name);
+  }, [company.name]);
+  useEffect(() => {
+    setTicker(company.ticker);
+  }, [company.ticker]);
+  useEffect(() => {
+    setFiscalYear(company.fiscalYear);
+  }, [company.fiscalYear]);
 
   return (
     <header className="border-b border-ink-200 bg-white">
