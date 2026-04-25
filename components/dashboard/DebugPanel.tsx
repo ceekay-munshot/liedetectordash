@@ -10,8 +10,11 @@ export function DebugPanel({ job }: { job?: RefreshJob }) {
   const [open, setOpen] = useState(false);
   const resolver = job?.debug?.resolver;
   const discovery = job?.debug?.discovery;
+  const extraction = job?.debug?.extraction;
   const errorCount =
-    (resolver?.errors?.length ?? 0) + (discovery?.errors?.length ?? 0);
+    (resolver?.errors?.length ?? 0) +
+    (discovery?.errors?.length ?? 0) +
+    (extraction?.errors?.length ?? 0);
 
   return (
     <SectionCard
@@ -37,7 +40,7 @@ export function DebugPanel({ job }: { job?: RefreshJob }) {
         </div>
       }
     >
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <DebugCard
           title="Stage 1 · Company resolver"
           rows={[
@@ -62,6 +65,18 @@ export function DebugPanel({ job }: { job?: RefreshJob }) {
             ["Duration", discovery?.durationMs != null ? `${discovery.durationMs} ms` : "—"],
           ]}
           tone={discovery?.errors?.length ? "warn" : discovery ? "ok" : "muted"}
+        />
+        <DebugCard
+          title="Stage 3-4 · Parse + extract"
+          rows={[
+            ["Considered docs", String(extraction?.consideredDocs ?? 0)],
+            ["Parsed OK", String(extraction?.parsedOk ?? 0)],
+            ["Failed / skipped", String((extraction?.parsedFailed ?? 0) + (extraction?.skipped ?? 0))],
+            ["Promises extracted", String(extraction?.promisesExtracted ?? 0)],
+            ["Docs with 0 promises", String(extraction?.docsWithZeroPromises ?? 0)],
+            ["Duration", extraction?.durationMs != null ? `${extraction.durationMs} ms` : "—"],
+          ]}
+          tone={extraction?.errors?.length ? "warn" : extraction ? "ok" : "muted"}
         />
       </div>
 
@@ -116,11 +131,31 @@ export function DebugPanel({ job }: { job?: RefreshJob }) {
             </div>
           )}
 
-          {(resolver?.errors?.length ?? 0) + (discovery?.errors?.length ?? 0) > 0 && (
+          {extraction?.perType && Object.keys(extraction.perType).length > 0 && (
+            <div>
+              <div className="section-title mb-2">Promises by type</div>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(extraction.perType).map(([t, n]) => (
+                  <span
+                    key={t}
+                    className="rounded-full border border-ink-200 bg-white px-2.5 py-0.5 text-xs text-ink-700"
+                  >
+                    {t}: <span className="font-semibold text-ink-900">{n}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {errorCount > 0 && (
             <div>
               <div className="section-title mb-2">Errors</div>
               <ul className="space-y-1 rounded-lg border border-bad-100 bg-bad-100/40 p-3 text-xs text-bad-500">
-                {[...(resolver?.errors ?? []), ...(discovery?.errors ?? [])].map((e, i) => (
+                {[
+                  ...(resolver?.errors ?? []),
+                  ...(discovery?.errors ?? []),
+                  ...(extraction?.errors ?? []),
+                ].map((e, i) => (
                   <li key={i}>
                     <span className="font-semibold">[{e.source}]</span> {e.message}
                   </li>

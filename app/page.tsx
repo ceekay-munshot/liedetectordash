@@ -106,7 +106,7 @@ function LivenessBanner({
         <span className="font-semibold">Sample data shown.</span>{" "}
         <span className="text-warn-500/90">
           Enter a company / ticker and click Refresh to load live data for
-          sections A, B, C from BSE/NSE.
+          sections A, B, C, D from BSE/NSE plus on-the-fly PDF extraction.
         </span>
       </div>
     );
@@ -115,8 +115,8 @@ function LivenessBanner({
     <div className="rounded-2xl border border-emerald-200 bg-ok-100/60 p-4 text-sm text-ok-500">
       <span className="font-semibold">Live:</span>{" "}
       <span className="text-ok-500/90">
-        Sections A · B · C are populated from primary sources. Sections D – I
-        still use mock data in this step.
+        Sections A · B · C · D are populated from primary sources and
+        rule-based extraction. Sections E – I still use mock data in this step.
       </span>
     </div>
   );

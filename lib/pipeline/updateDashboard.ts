@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import {
   mockConflicts,
+  mockDashboardState,
   mockMonitor,
   mockRedFlags,
   mockRootCauses,
@@ -24,8 +25,12 @@ export interface UpdateDashboardInput {
   lastRefresh?: RefreshJob;
 }
 
-// Stage 7: Assemble the dashboard state. A/B/C are live (company, sources,
-// gaps); D-I are still mock and intentionally pass through unchanged for now.
+// Stage 7: Assemble the dashboard state.
+//   A · Company  -> live (input.company)
+//   B · Sources  -> live (input.sources)
+//   C · Gaps     -> live (input.gaps)
+//   D · Promises -> live (input.promises)
+//   E - I        -> still mock (intentional, per the staged plan).
 export async function updateDashboard(
   input: UpdateDashboardInput,
 ): Promise<DashboardState> {
@@ -34,7 +39,7 @@ export async function updateDashboard(
     sources: input.sources,
     gaps: input.gaps,
     promises: input.promises,
-    scorecard: input.scorecard,
+    scorecard: mockDashboardState.scorecard,
     trend: mockTrend,
     rootCauses: mockRootCauses,
     redFlags: mockRedFlags,

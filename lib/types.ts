@@ -117,11 +117,14 @@ export interface PromiseRecord {
   sourceId: string;
   sourceType: SourceType;
   promiseType: PromiseType;
-  promiseText: string; // short human-readable summary
-  exactQuote: string; // verbatim
+  promiseText: string; // normalized one-line statement
+  exactQuote: string; // verbatim, capped at 25 words
   metric: string; // e.g., "Revenue growth"
-  target: string; // e.g., "25-30% YoY"
+  target: string; // e.g., "25-30%"
+  unit?: string; // e.g., "%", "INR Cr", "x"
+  timeHorizon?: string; // e.g., "Q3 FY25", "FY26", "next 12 months"
   testDate: string; // ISO - when we can verify
+  speaker?: string; // e.g., "Mgmt — CFO", if attributable
   confidence: Confidence;
   actualOutcome?: string;
   status: PromiseStatus;
@@ -129,6 +132,7 @@ export interface PromiseRecord {
   managementExplanation?: string;
   rootCauseTags: string[];
   citations: Citation[];
+  extractionNotes?: string;
 }
 
 // ------------------------------
@@ -261,6 +265,31 @@ export interface ResolverDebug {
   durationMs?: number;
 }
 
+export interface ParsedDocSummary {
+  sourceId: string;
+  url?: string;
+  contentType?: string;
+  byteLength?: number;
+  pageCount?: number;
+  charCount?: number;
+  parser: "pdf" | "html" | "skipped" | "failed";
+  status: "ok" | "failed" | "skipped";
+  error?: string;
+  durationMs?: number;
+}
+
+export interface ExtractionDebug {
+  consideredDocs: number;
+  parsedOk: number;
+  parsedFailed: number;
+  skipped: number;
+  promisesExtracted: number;
+  docsWithZeroPromises: number;
+  perType: Record<string, number>;
+  errors: { source: string; message: string }[];
+  durationMs?: number;
+}
+
 export interface DiscoveryDebug {
   fyRange: { from: string; to: string }; // ISO
   fiscalYears: string[]; // e.g., ["FY21","FY22",...]
@@ -283,6 +312,7 @@ export interface RefreshJob {
   debug?: {
     resolver?: ResolverDebug;
     discovery?: DiscoveryDebug;
+    extraction?: ExtractionDebug;
   };
 }
 

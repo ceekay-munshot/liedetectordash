@@ -1,12 +1,12 @@
 import type {
   DashboardState,
   MissingSourceGap,
+  PromiseRecord,
   RefreshJob,
   RefreshStage,
   RefreshStageState,
   SourceDocument,
 } from "../types";
-import { mockPromises } from "../mockData";
 import { resolveCompany } from "./resolveCompany";
 import { fetchDocuments } from "./fetchDocuments";
 import { parseDocuments } from "./parseDocuments";
@@ -20,6 +20,7 @@ export interface RunRefreshInput {
   ticker: string;
   fiscalYear: string;
   scopeYears?: number;
+  maxParseDocs?: number;
 }
 
 export interface RunRefreshResult {
@@ -35,9 +36,9 @@ function makeStage(stage: RefreshStage): RefreshStageState {
   return { stage, status: "pending" };
 }
 
-// End-to-end refresh. Stage 1 (resolveCompany) and Stage 2 (fetchDocuments) are
-// live; Stage 3-6 still operate on mock content for now. updateDashboard wires
-// real A/B/C with mock D-I.
+// End-to-end refresh. Stages 1, 2, 3, 4 are live; stages 5 and 6 (testOutcomes,
+// computeScore) still operate on the freshly-extracted promises but produce a
+// pending-only scorecard since outcomes have not been verified yet.
 export async function runRefresh(
   input: RunRefreshInput,
   onProgress?: (job: RefreshJob) => void,
@@ -84,7 +85,7 @@ export async function runRefresh(
 
   const scopeYears = input.scopeYears ?? 5;
 
-  // Stage 1: live resolver.
+  // Stage 1.
   const resolved = await run("resolveCompany", () =>
     resolveCompany({
       name: input.company,
@@ -106,7 +107,7 @@ export async function runRefresh(
   }
   const company = resolved.profile;
 
-  // Stage 2: live document discovery.
+  // Stage 2.
   let sources: SourceDocument[] = [];
   let gaps: MissingSourceGap[] = [];
   await run("fetchDocuments", async () => {
@@ -117,13 +118,21 @@ export async function runRefresh(
     return r;
   });
 
-  // Stages 3-6: still mock for now (extraction intelligence comes next step).
+  // Stage 3 (visibility only).
   await run("parseDocuments", () => parseDocuments(sources));
-  const promises = await run("extractPromises", () => extractPromises([]));
+
+  // Stage 4 — live extraction.
+  let promises: PromiseRecord[] = [];
+  await run("extractPromises", async () => {
+    const r = await extractPromises(sources, input.maxParseDocs ?? 30);
+    promises = r.promises;
+    job.debug!.extraction = r.debug;
+    return r;
+  });
+
+  // Stages 5/6 are still mock-equivalent: all extracted promises stay Pending.
   const tested = await run("testOutcomes", () => testOutcomes(promises));
   const scorecard = await run("computeScore", () => computeScore(tested));
-
-  void mockPromises; // keep mock import warm for clarity
 
   const state = await run("updateDashboard", () =>
     updateDashboard({

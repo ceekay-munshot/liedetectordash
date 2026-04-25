@@ -1,11 +1,29 @@
-import type { PromiseRecord } from "../types";
-import type { ParsedDocument } from "./parseDocuments";
-import { mockPromises } from "../mockData";
+import type {
+  ExtractionDebug,
+  ParsedDocSummary,
+  PromiseRecord,
+  SourceDocument,
+} from "../types";
 
-// Step 4: Extract promises and commitments from parsed sources.
-// Real implementation would use an LLM + rule-based classifier.
+export interface ExtractPromisesResult {
+  promises: PromiseRecord[];
+  parsedDocs: ParsedDocSummary[];
+  debug: ExtractionDebug;
+}
+
+// Stage 4: Live promise extraction. Calls the server-side extractor which
+// fetches + parses + extracts. The pipeline never touches raw document bytes.
 export async function extractPromises(
-  _parsed: ParsedDocument[],
-): Promise<PromiseRecord[]> {
-  return mockPromises;
+  sources: SourceDocument[],
+  maxDocs = 30,
+): Promise<ExtractPromisesResult> {
+  const res = await fetch("/api/extract-promises", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sources, maxDocs }),
+  });
+  if (!res.ok) {
+    throw new Error(`Extractor responded ${res.status}`);
+  }
+  return (await res.json()) as ExtractPromisesResult;
 }
