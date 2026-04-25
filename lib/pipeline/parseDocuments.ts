@@ -1,18 +1,15 @@
 import type { SourceDocument } from "../types";
 
-export interface ParsedDocument {
-  source: SourceDocument;
-  text: string;
-  sections?: { heading: string; text: string; page?: number }[];
+// Stage 3: Document parsing happens server-side together with extraction in
+// /api/extract-promises so we don't ship raw document text to the browser. This
+// pipeline stage is therefore a fast pass-through used purely for visibility.
+export interface ParseDocumentsResult {
+  ready: number; // count of sources eligible for parsing
 }
 
-// Step 3: Parse documents into normalized text/sections. Stub returns empty text.
 export async function parseDocuments(
   sources: SourceDocument[],
-): Promise<ParsedDocument[]> {
-  return sources.map((source) => ({
-    source,
-    text: "",
-    sections: [],
-  }));
+): Promise<ParseDocumentsResult> {
+  const ready = sources.filter((s) => !!s.url).length;
+  return { ready };
 }

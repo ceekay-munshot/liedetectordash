@@ -11,12 +11,17 @@ export type Exchange = "NSE" | "BSE" | "Both" | "Other";
 
 export interface CompanyProfile {
   name: string;
-  ticker: string;
+  ticker: string; // primary ticker (NSE preferred, else BSE code)
+  nseSymbol?: string;
+  bseCode?: string;
   exchange: Exchange;
   isin?: string;
   sector: string;
   industry: string;
-  fiscalYear: string; // e.g., "FY25"
+  website?: string;
+  irPage?: string;
+  fiscalYearConvention?: string; // e.g., "Apr–Mar"
+  fiscalYear: string; // e.g., "FY25" — the year currently in scope
   scopePeriod: { from: string; to: string }; // ISO dates
   lastUpdated: string; // ISO
   notes?: string;
@@ -29,12 +34,16 @@ export type SourceType =
   | "Annual Report"
   | "Earnings Call"
   | "Investor Presentation"
+  | "Financial Result"
   | "DRHP/RHP"
   | "Exchange Filing"
   | "Press Release"
   | "Regulatory Order"
   | "Interview"
   | "Broker Note";
+
+export type SourceOrigin = "BSE" | "NSE" | "IR" | "Other";
+export type Accessibility = "open" | "restricted" | "broken" | "unknown";
 
 export interface SourceDocument {
   id: string;
@@ -44,9 +53,12 @@ export interface SourceDocument {
   publishedAt: string; // ISO
   ingestedAt: string; // ISO
   url?: string;
+  originSite?: SourceOrigin;
+  accessibility?: Accessibility;
   pages?: number;
   hash?: string;
   trustScore?: number; // 0-100
+  notes?: string;
 }
 
 // ------------------------------
@@ -105,11 +117,14 @@ export interface PromiseRecord {
   sourceId: string;
   sourceType: SourceType;
   promiseType: PromiseType;
-  promiseText: string; // short human-readable summary
-  exactQuote: string; // verbatim
+  promiseText: string; // normalized one-line statement
+  exactQuote: string; // verbatim, capped at 25 words
   metric: string; // e.g., "Revenue growth"
-  target: string; // e.g., "25-30% YoY"
+  target: string; // e.g., "25-30%"
+  unit?: string; // e.g., "%", "INR Cr", "x"
+  timeHorizon?: string; // e.g., "Q3 FY25", "FY26", "next 12 months"
   testDate: string; // ISO - when we can verify
+  speaker?: string; // e.g., "Mgmt — CFO", if attributable
   confidence: Confidence;
   actualOutcome?: string;
   status: PromiseStatus;
@@ -117,6 +132,7 @@ export interface PromiseRecord {
   managementExplanation?: string;
   rootCauseTags: string[];
   citations: Citation[];
+  extractionNotes?: string;
 }
 
 // ------------------------------
@@ -231,6 +247,59 @@ export interface RefreshStageState {
   notes?: string;
 }
 
+export interface ResolverCandidate {
+  exchange: "NSE" | "BSE";
+  ticker: string;
+  name: string;
+  isin?: string;
+  bseCode?: string;
+  score?: number;
+}
+
+export interface ResolverDebug {
+  query: { name?: string; ticker?: string };
+  attempted: ("BSE" | "NSE")[];
+  matchedFrom?: "BSE" | "NSE";
+  candidates: ResolverCandidate[];
+  errors: { source: string; message: string }[];
+  durationMs?: number;
+}
+
+export interface ParsedDocSummary {
+  sourceId: string;
+  url?: string;
+  contentType?: string;
+  byteLength?: number;
+  pageCount?: number;
+  charCount?: number;
+  parser: "pdf" | "html" | "skipped" | "failed";
+  status: "ok" | "failed" | "skipped";
+  error?: string;
+  durationMs?: number;
+}
+
+export interface ExtractionDebug {
+  consideredDocs: number;
+  parsedOk: number;
+  parsedFailed: number;
+  skipped: number;
+  promisesExtracted: number;
+  docsWithZeroPromises: number;
+  perType: Record<string, number>;
+  errors: { source: string; message: string }[];
+  durationMs?: number;
+}
+
+export interface DiscoveryDebug {
+  fyRange: { from: string; to: string }; // ISO
+  fiscalYears: string[]; // e.g., ["FY21","FY22",...]
+  documentsFound: number;
+  gapsFound: number;
+  perYear: Record<string, { found: number; gaps: number }>;
+  errors: { source: string; message: string }[];
+  durationMs?: number;
+}
+
 export interface RefreshJob {
   id: string;
   companyTicker: string;
@@ -240,6 +309,11 @@ export interface RefreshJob {
   status: "queued" | "running" | "completed" | "failed";
   currentStage?: RefreshStage;
   stages: RefreshStageState[];
+  debug?: {
+    resolver?: ResolverDebug;
+    discovery?: DiscoveryDebug;
+    extraction?: ExtractionDebug;
+  };
 }
 
 // ------------------------------

@@ -16,24 +16,28 @@ import { CredibilityTrendView } from "@/components/dashboard/CredibilityTrendVie
 import { RootCauseMap } from "@/components/dashboard/RootCauseMap";
 import { RedFlagPatterns } from "@/components/dashboard/RedFlagPatterns";
 import { InvestorChecklist } from "@/components/dashboard/InvestorChecklist";
+import { DebugPanel } from "@/components/dashboard/DebugPanel";
 
 export default function DashboardPage() {
   const [state, setState] = useState<DashboardState>(mockDashboardState);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasLive, setHasLive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleRefresh = async (q: DashboardQuery) => {
     setIsRefreshing(true);
+    setError(null);
     try {
       const { state: next } = await runRefresh({
         company: q.company,
         ticker: q.ticker,
         fiscalYear: q.fiscalYear,
       });
-      // Preserve the previous company's human-authored notes if any.
-      setState({
-        ...next,
-        company: { ...next.company, notes: state.company.notes },
-      });
+      setState(next);
+      setHasLive(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      // Keep previous state visible for context.
     } finally {
       setIsRefreshing(false);
     }
@@ -55,6 +59,10 @@ export default function DashboardPage() {
       <SectionNav />
 
       <main className="mx-auto max-w-7xl space-y-6 px-6 py-8">
+        <LivenessBanner hasLive={hasLive} error={error} />
+
+        <DebugPanel job={state.lastRefresh} />
+
         <CompanyScope company={state.company} />
         <SourceRegister sources={state.sources} />
         <MissingSourcesGaps gaps={state.gaps} />
@@ -66,9 +74,50 @@ export default function DashboardPage() {
         <InvestorChecklist items={state.monitorItems} />
 
         <footer className="pt-6 text-center text-[11px] text-ink-400">
-          Base scaffold · mock data · do not treat as investment advice.
+          Sections A · B · C are live (BSE primary). D – I still on mock data.
+          Not investment advice.
         </footer>
       </main>
+    </div>
+  );
+}
+
+function LivenessBanner({
+  hasLive,
+  error,
+}: {
+  hasLive: boolean;
+  error: string | null;
+}) {
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-bad-100/40 p-4 text-sm text-bad-500">
+        <div className="font-semibold">Refresh failed</div>
+        <div className="mt-0.5 text-bad-500/90">{error}</div>
+        <div className="mt-1 text-xs text-bad-500/80">
+          Showing last known state. Check the debug panel below for details.
+        </div>
+      </div>
+    );
+  }
+  if (!hasLive) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-warn-100/50 p-4 text-sm text-warn-500">
+        <span className="font-semibold">Sample data shown.</span>{" "}
+        <span className="text-warn-500/90">
+          Enter a company / ticker and click Refresh to load live data for
+          sections A, B, C, D from BSE/NSE plus on-the-fly PDF extraction.
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-2xl border border-emerald-200 bg-ok-100/60 p-4 text-sm text-ok-500">
+      <span className="font-semibold">Live:</span>{" "}
+      <span className="text-ok-500/90">
+        Sections A · B · C · D are populated from primary sources and
+        rule-based extraction. Sections E – I still use mock data in this step.
+      </span>
     </div>
   );
 }

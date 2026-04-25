@@ -11,12 +11,14 @@
     "postinstall": "if [ \"$CI\" = \"true\" ]; then next build; else echo 'skip postinstall build (set CI=true to enable)'; fi"
   },
   "dependencies": {
-    "next": "14.2.35",
+    "next": "14.2.15",
+    "pdf-parse": "1.1.1",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@types/node": "20.14.10",
+    "@types/pdf-parse": "1.1.4",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
     "autoprefixer": "10.4.19",

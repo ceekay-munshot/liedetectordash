@@ -1,28 +1,34 @@
-import type { CompanyProfile } from "../types";
+import type { CompanyProfile, ResolverDebug } from "../types";
 
 export interface ResolveCompanyInput {
   name?: string;
   ticker?: string;
   fiscalYear: string;
+  scopeYears?: number;
 }
 
-// Step 1: Resolve the company identity (name, ticker, ISIN, exchange, sector).
-// Real implementation would hit NSE/BSE/MCA lookups; here we return a stub.
+export interface ResolveCompanyResult {
+  profile: CompanyProfile | null;
+  debug: ResolverDebug;
+  error?: string;
+}
+
+// Stage 1: Resolve company identity from BSE/NSE via the server-side route.
+// Throws only on transport errors. Returns { profile: null, debug, error } when
+// the company can't be resolved, so the pipeline can record the gap cleanly.
 export async function resolveCompany(
   input: ResolveCompanyInput,
-): Promise<CompanyProfile> {
-  const today = new Date();
-  return {
-    name: input.name?.trim() || "Unknown Company",
-    ticker: input.ticker?.trim().toUpperCase() || "UNKNOWN",
-    exchange: "NSE",
-    sector: "Unknown",
-    industry: "Unknown",
-    fiscalYear: input.fiscalYear,
-    scopePeriod: {
-      from: new Date(today.getFullYear() - 4, 3, 1).toISOString(),
-      to: new Date(today.getFullYear(), 2, 31).toISOString(),
-    },
-    lastUpdated: today.toISOString(),
-  };
+): Promise<ResolveCompanyResult> {
+  const res = await fetch("/api/resolve-company", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: input.name,
+      ticker: input.ticker,
+      fiscalYear: input.fiscalYear,
+      scopeYears: input.scopeYears ?? 5,
+    }),
+  });
+  const data = (await res.json()) as ResolveCompanyResult;
+  return data;
 }

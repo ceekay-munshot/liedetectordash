@@ -103,8 +103,13 @@ export function WalkTheTalkTable({ promises }: { promises: PromiseRecord[] }) {
       id="walk-the-talk"
       eyebrow="D · Walk-the-Talk Tracking"
       title="Chronological promise vs. outcome ledger"
-      subtitle="Every commitment, its verbatim source, the test, and the result."
-      actions={<Badge tone="brand">{filtered.length} shown</Badge>}
+      subtitle="Every commitment, its verbatim source, the test, and the result. Outcome / status / variance / explanation columns are next-step work."
+      actions={
+        <div className="flex items-center gap-2">
+          <Badge tone="ok">Live</Badge>
+          <Badge tone="brand">{filtered.length} shown</Badge>
+        </div>
+      }
     >
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Input
@@ -190,38 +195,60 @@ export function WalkTheTalkTable({ promises }: { promises: PromiseRecord[] }) {
                   </div>
                   <div className="mt-0.5 text-[11px] uppercase tracking-wider text-ink-500">
                     {p.promiseType}
+                    {p.speaker ? ` · ${p.speaker}` : ""}
                   </div>
+                  {p.extractionNotes && (
+                    <div className="mt-0.5 text-[11px] italic text-ink-400">
+                      {p.extractionNotes}
+                    </div>
+                  )}
                 </td>
                 <td className="max-w-[280px] px-3 py-3 text-ink-700">
                   <span className="italic">“{p.exactQuote}”</span>
                 </td>
                 <td className="px-3 py-3">
                   <div className="font-medium text-ink-900">{p.metric}</div>
-                  <div className="text-xs text-ink-500">Target: {p.target}</div>
+                  <div className="text-xs text-ink-500">
+                    Target: {p.target || "—"}
+                    {p.unit && p.target !== "—" ? "" : ""}
+                  </div>
+                  {p.timeHorizon && (
+                    <div className="text-[11px] text-ink-500">Horizon: {p.timeHorizon}</div>
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-3 py-3 text-ink-700">
-                  {formatDate(p.testDate)}
+                  {p.testDate ? formatDate(p.testDate) : <span className="text-ink-400">—</span>}
                 </td>
                 <td className="px-3 py-3">
                   <ConfidencePill confidence={p.confidence} />
                 </td>
-                <td className="max-w-[200px] px-3 py-3 text-ink-700">
-                  {p.actualOutcome ?? "—"}
+                <td className="max-w-[200px] px-3 py-3">
+                  {p.actualOutcome ? (
+                    <span className="text-ink-700">{p.actualOutcome}</span>
+                  ) : (
+                    <span className="text-[11px] italic text-ink-400">next step</span>
+                  )}
                 </td>
                 <td className="px-3 py-3">
                   <StatusPill status={p.status} />
                 </td>
                 <td className="whitespace-nowrap px-3 py-3 text-ink-700">
-                  {p.variancePct === undefined
-                    ? "—"
-                    : `${p.variancePct > 0 ? "+" : ""}${p.variancePct}%`}
+                  {p.variancePct === undefined ? (
+                    <span className="text-[11px] italic text-ink-400">next step</span>
+                  ) : (
+                    `${p.variancePct > 0 ? "+" : ""}${p.variancePct}%`
+                  )}
                 </td>
-                <td className="max-w-[240px] px-3 py-3 text-ink-700">
-                  {p.managementExplanation ?? "—"}
+                <td className="max-w-[240px] px-3 py-3">
+                  {p.managementExplanation ? (
+                    <span className="text-ink-700">{p.managementExplanation}</span>
+                  ) : (
+                    <span className="text-[11px] italic text-ink-400">next step</span>
+                  )}
                 </td>
                 <td className="px-3 py-3">
                   {p.rootCauseTags.length === 0 ? (
-                    <span className="text-ink-400">—</span>
+                    <span className="text-[11px] italic text-ink-400">next step</span>
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {p.rootCauseTags.map((t) => (
@@ -252,7 +279,9 @@ export function WalkTheTalkTable({ promises }: { promises: PromiseRecord[] }) {
                   colSpan={14}
                   className="px-3 py-8 text-center text-sm text-ink-500"
                 >
-                  No promises match the current filters.
+                  {promises.length === 0
+                    ? "No promises extracted yet. Click Refresh to run extraction on the discovered sources."
+                    : "No promises match the current filters."}
                 </td>
               </tr>
             )}

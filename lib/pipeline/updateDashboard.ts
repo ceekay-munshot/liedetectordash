@@ -9,7 +9,7 @@ import type {
 } from "../types";
 import {
   mockConflicts,
-  mockGaps,
+  mockDashboardState,
   mockMonitor,
   mockRedFlags,
   mockRootCauses,
@@ -19,22 +19,27 @@ import {
 export interface UpdateDashboardInput {
   company: CompanyProfile;
   sources: SourceDocument[];
+  gaps: MissingSourceGap[];
   promises: PromiseRecord[];
   scorecard: CredibilityScorecard;
-  gaps?: MissingSourceGap[];
   lastRefresh?: RefreshJob;
 }
 
-// Step 7: Assemble the dashboard state that the UI renders.
+// Stage 7: Assemble the dashboard state.
+//   A · Company  -> live (input.company)
+//   B · Sources  -> live (input.sources)
+//   C · Gaps     -> live (input.gaps)
+//   D · Promises -> live (input.promises)
+//   E - I        -> still mock (intentional, per the staged plan).
 export async function updateDashboard(
   input: UpdateDashboardInput,
 ): Promise<DashboardState> {
   return {
     company: input.company,
     sources: input.sources,
-    gaps: input.gaps ?? mockGaps,
+    gaps: input.gaps,
     promises: input.promises,
-    scorecard: input.scorecard,
+    scorecard: mockDashboardState.scorecard,
     trend: mockTrend,
     rootCauses: mockRootCauses,
     redFlags: mockRedFlags,
