@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "if [ \"$CI\" = \"true\" ]; then next build; else echo 'skip postinstall build (set CI=true to enable)'; fi"
   },
   "dependencies": {
     "next": "14.2.15",
