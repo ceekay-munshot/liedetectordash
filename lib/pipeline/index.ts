@@ -1,9 +1,12 @@
 import type {
   DashboardState,
+  MissingSourceGap,
   RefreshJob,
   RefreshStage,
   RefreshStageState,
+  SourceDocument,
 } from "../types";
+import { mockPromises } from "../mockData";
 import { resolveCompany } from "./resolveCompany";
 import { fetchDocuments } from "./fetchDocuments";
 import { parseDocuments } from "./parseDocuments";
@@ -16,6 +19,7 @@ export interface RunRefreshInput {
   company: string;
   ticker: string;
   fiscalYear: string;
+  scopeYears?: number;
 }
 
 export interface RunRefreshResult {
@@ -31,8 +35,9 @@ function makeStage(stage: RefreshStage): RefreshStageState {
   return { stage, status: "pending" };
 }
 
-// End-to-end refresh skeleton. Each stage is separately testable.
-// Intentionally linear; parallelization can be added later.
+// End-to-end refresh. Stage 1 (resolveCompany) and Stage 2 (fetchDocuments) are
+// live; Stage 3-6 still operate on mock content for now. updateDashboard wires
+// real A/B/C with mock D-I.
 export async function runRefresh(
   input: RunRefreshInput,
   onProgress?: (job: RefreshJob) => void,
@@ -52,6 +57,7 @@ export async function runRefresh(
       makeStage("computeScore"),
       makeStage("updateDashboard"),
     ],
+    debug: {},
   };
 
   const run = async <T>(stage: RefreshStage, fn: () => Promise<T>): Promise<T> => {
@@ -76,22 +82,54 @@ export async function runRefresh(
     }
   };
 
-  const company = await run("resolveCompany", () =>
+  const scopeYears = input.scopeYears ?? 5;
+
+  // Stage 1: live resolver.
+  const resolved = await run("resolveCompany", () =>
     resolveCompany({
       name: input.company,
       ticker: input.ticker,
       fiscalYear: input.fiscalYear,
+      scopeYears,
     }),
   );
-  const sources = await run("fetchDocuments", () => fetchDocuments(company));
-  const parsed = await run("parseDocuments", () => parseDocuments(sources));
-  const promises = await run("extractPromises", () => extractPromises(parsed));
+  job.debug!.resolver = resolved.debug;
+  if (!resolved.profile) {
+    job.stages.find((x) => x.stage === "resolveCompany")!.notes =
+      resolved.error || "Could not resolve company on BSE/NSE.";
+    job.status = "failed";
+    job.completedAt = nowIso();
+    onProgress?.({ ...job });
+    throw new Error(
+      resolved.error || "Could not resolve company on BSE or NSE.",
+    );
+  }
+  const company = resolved.profile;
+
+  // Stage 2: live document discovery.
+  let sources: SourceDocument[] = [];
+  let gaps: MissingSourceGap[] = [];
+  await run("fetchDocuments", async () => {
+    const r = await fetchDocuments(company, scopeYears);
+    sources = r.sources;
+    gaps = r.gaps;
+    job.debug!.discovery = r.debug;
+    return r;
+  });
+
+  // Stages 3-6: still mock for now (extraction intelligence comes next step).
+  await run("parseDocuments", () => parseDocuments(sources));
+  const promises = await run("extractPromises", () => extractPromises([]));
   const tested = await run("testOutcomes", () => testOutcomes(promises));
   const scorecard = await run("computeScore", () => computeScore(tested));
+
+  void mockPromises; // keep mock import warm for clarity
+
   const state = await run("updateDashboard", () =>
     updateDashboard({
       company,
       sources,
+      gaps,
       promises: tested,
       scorecard,
       lastRefresh: job,
