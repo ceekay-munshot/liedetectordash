@@ -91,12 +91,21 @@ export async function POST(req: Request): Promise<NextResponse> {
     announcements = r.items;
     for (const m of r.errors) {
       debug.errors.push({ source: "BSE announcements", message: m });
+      console.error("[discover-documents] BSE error:", m);
+    }
+    console.log(
+      `[discover-documents] ${profile.name} (${profile.bseCode}): fetched ${announcements.length} announcements over ${r.pagesFetched} page(s)`,
+    );
+    if (announcements.length === 0 && r.errors.length === 0) {
+      debug.errors.push({
+        source: "BSE announcements",
+        message: `BSE returned 0 announcements for code ${profile.bseCode}. This usually means BSE is rate-limiting; try again in a minute.`,
+      });
     }
   } catch (e) {
-    debug.errors.push({
-      source: "BSE announcements",
-      message: e instanceof Error ? e.message : String(e),
-    });
+    const m = e instanceof Error ? e.message : String(e);
+    debug.errors.push({ source: "BSE announcements", message: m });
+    console.error("[discover-documents] BSE fatal:", m);
   }
 
   // Classify and convert.

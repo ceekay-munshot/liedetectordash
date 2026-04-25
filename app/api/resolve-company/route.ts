@@ -57,7 +57,15 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     bseHits = await searchBseByText(query);
   } catch (e) {
-    debug.errors.push({ source: "BSE search", message: msg(e) });
+    const m = msg(e);
+    debug.errors.push({ source: "BSE search", message: m });
+    console.error("[resolve-company] BSE search failed:", m);
+  }
+  if (bseHits.length === 0 && !debug.errors.some((e) => e.source === "BSE search")) {
+    debug.errors.push({
+      source: "BSE search",
+      message: `No BSE matches for "${query}". This usually means BSE is rate-limiting or blocking this IP.`,
+    });
   }
   for (const h of bseHits.slice(0, 8)) {
     debug.candidates.push({
@@ -73,8 +81,12 @@ export async function POST(req: Request): Promise<NextResponse> {
   // 2. NSE search (best effort).
   debug.attempted.push("NSE");
   try {
-    const nseHits = await searchNseByText(query);
-    for (const h of nseHits.slice(0, 8)) {
+    const nse = await searchNseByText(query);
+    if (nse.error) {
+      debug.errors.push({ source: "NSE search", message: nse.error });
+      console.error("[resolve-company] NSE search error:", nse.error);
+    }
+    for (const h of nse.hits.slice(0, 8)) {
       debug.candidates.push({
         exchange: "NSE",
         ticker: h.symbol,
@@ -84,16 +96,31 @@ export async function POST(req: Request): Promise<NextResponse> {
       });
     }
   } catch (e) {
-    debug.errors.push({ source: "NSE search", message: msg(e) });
+    const m = msg(e);
+    debug.errors.push({ source: "NSE search", message: m });
+    console.error("[resolve-company] NSE search failed:", m);
   }
 
   if (debug.candidates.length === 0) {
     debug.durationMs = Date.now() - startedAt;
+    const detail = debug.errors.length
+      ? ` Errors: ${debug.errors.map((e) => `${e.source}: ${e.message}`).join("; ")}`
+      : "";
+    console.error(
+      `[resolve-company] No candidates for "${query}".${detail}`,
+    );
     return NextResponse.json(
-      { profile: null, debug, error: "No matches found on BSE or NSE." },
+      {
+        profile: null,
+        debug,
+        error: `No matches found on BSE or NSE for "${query}".${detail}`,
+      },
       { status: 200 },
     );
   }
+  console.log(
+    `[resolve-company] "${query}" -> ${debug.candidates.length} candidates (BSE: ${bseHits.length}, NSE: ${debug.candidates.length - bseHits.length})`,
+  );
 
   debug.candidates.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   const best = debug.candidates[0];
