@@ -4,9 +4,10 @@ import type {
   ResolverCandidate,
   ResolverDebug,
 } from "@/lib/types";
-import { fetchBseHeader, searchBseByText } from "@/lib/sources/bse";
+import { fetchBseHeader, searchBseDetailed } from "@/lib/sources/bse";
 import { searchNseByText } from "@/lib/sources/nse";
 import { fyForDate, fyLabel, scopeRangeForLastN } from "@/lib/sources/period";
+import { lookupStaticTicker } from "@/lib/sources/staticTickers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,20 +53,19 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   // 1. BSE search (most permissive endpoint).
-  let bseHits: Awaited<ReturnType<typeof searchBseByText>> = [];
+  let bseHits: Awaited<ReturnType<typeof searchBseDetailed>>["hits"] = [];
   debug.attempted.push("BSE");
   try {
-    bseHits = await searchBseByText(query);
+    const out = await searchBseDetailed(query);
+    bseHits = out.hits;
+    if (out.error) {
+      debug.errors.push({ source: "BSE search", message: out.error });
+      console.error("[resolve-company] BSE search:", out.error);
+    }
   } catch (e) {
     const m = msg(e);
     debug.errors.push({ source: "BSE search", message: m });
     console.error("[resolve-company] BSE search failed:", m);
-  }
-  if (bseHits.length === 0 && !debug.errors.some((e) => e.source === "BSE search")) {
-    debug.errors.push({
-      source: "BSE search",
-      message: `No BSE matches for "${query}". This usually means BSE is rate-limiting or blocking this IP.`,
-    });
   }
   for (const h of bseHits.slice(0, 8)) {
     debug.candidates.push({
@@ -99,6 +99,43 @@ export async function POST(req: Request): Promise<NextResponse> {
     const m = msg(e);
     debug.errors.push({ source: "NSE search", message: m });
     console.error("[resolve-company] NSE search failed:", m);
+  }
+
+  // Fallback: when both BSE and NSE search are blocked (Cloudflare egress is
+  // commonly rate-limited / 403'd by both), fall back to a small built-in
+  // table of the most-searched Indian listed companies. This guarantees that
+  // identity resolution at least works for popular tickers, even though
+  // discovery still depends on BSE corporate announcements being reachable.
+  if (debug.candidates.length === 0) {
+    const probes = [body.ticker, body.name].filter((x): x is string => !!x);
+    for (const p of probes) {
+      const hit = lookupStaticTicker(p);
+      if (hit) {
+        debug.candidates.push({
+          exchange: "BSE",
+          ticker: hit.bseCode,
+          name: hit.name,
+          isin: hit.isin,
+          bseCode: hit.bseCode,
+          score: 0.95,
+        });
+        debug.candidates.push({
+          exchange: "NSE",
+          ticker: hit.nseSymbol,
+          name: hit.name,
+          isin: hit.isin,
+          score: 0.95,
+        });
+        debug.errors.push({
+          source: "static fallback",
+          message: `BSE/NSE search returned 0 hits; resolved "${query}" via built-in table.`,
+        });
+        console.warn(
+          `[resolve-company] Falling back to static table for "${query}" -> ${hit.name} (${hit.bseCode} / ${hit.nseSymbol})`,
+        );
+        break;
+      }
+    }
   }
 
   if (debug.candidates.length === 0) {
@@ -147,21 +184,30 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
   }
 
+  // Static-table fallback for sector/industry/website when BSE header is
+  // unreachable. Looking up by best.ticker covers both BSE-code and NSE-symbol
+  // probes since the table indexes both.
+  const staticHit =
+    lookupStaticTicker(bse?.bseCode || "") ||
+    lookupStaticTicker(nse?.ticker || "") ||
+    lookupStaticTicker(best.ticker) ||
+    lookupStaticTicker(query);
+
   const today = new Date();
   const fy = body.fiscalYear || fyLabel(fyForDate(today));
   const scope = scopeRangeForLastN(body.scopeYears ?? 5, today);
 
   const profile: CompanyProfile = {
-    name: header?.CompName || best.name,
+    name: header?.CompName || staticHit?.name || best.name,
     ticker: nse?.ticker || bse?.ticker || best.ticker,
-    nseSymbol: nse?.ticker,
-    bseCode: bse?.bseCode || (best.exchange === "BSE" ? best.ticker : undefined),
-    exchange: nse && bse ? "Both" : nse ? "NSE" : bse ? "BSE" : "Other",
-    isin: header?.ISIN || best.isin || counterpart?.isin,
-    sector: header?.Sector || "",
-    industry: header?.Industry || "",
-    website: header?.Website || undefined,
-    irPage: header?.Website ? guessIrPage(header.Website) : undefined,
+    nseSymbol: nse?.ticker || staticHit?.nseSymbol,
+    bseCode: bse?.bseCode || staticHit?.bseCode || (best.exchange === "BSE" ? best.ticker : undefined),
+    exchange: nse && bse ? "Both" : nse ? "NSE" : bse ? "BSE" : staticHit ? "Both" : "Other",
+    isin: header?.ISIN || best.isin || counterpart?.isin || staticHit?.isin,
+    sector: header?.Sector || staticHit?.sector || "",
+    industry: header?.Industry || staticHit?.industry || "",
+    website: header?.Website || staticHit?.website || undefined,
+    irPage: (header?.Website || staticHit?.website) ? guessIrPage(header?.Website || staticHit?.website || "") : undefined,
     fiscalYearConvention: "Apr–Mar (Indian FY)",
     fiscalYear: fy,
     scopePeriod: scope,

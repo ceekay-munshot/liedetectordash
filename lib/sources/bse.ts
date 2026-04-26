@@ -21,6 +21,47 @@ const BROWSER_HEADERS: Record<string, string> = {
 const COOKIE_TTL_MS = 25 * 60 * 1000;
 let cookieJar: { value: string; expiresAt: number } | null = null;
 
+// Used by the document parser when it fetches BSE-hosted PDF attachments —
+// those URLs (www.bseindia.com/xml-data/corpfiling/AttachLive/…) are blocked
+// without a valid session, exactly like the JSON API endpoints.
+export async function getBseCookieHeader(): Promise<string> {
+  return getBseCookies();
+}
+
+// Read every Set-Cookie header value off a Response. On Cloudflare Workers
+// (and undici-based fetch in Node 18+) `headers.get("set-cookie")` only
+// returns the first one, which loses most of the BSE/NSE session jar; use
+// `getSetCookie()` when available and fall back to the comma-split heuristic
+// for older runtimes.
+function readSetCookies(res: Response): string[] {
+  const h = res.headers as Headers & { getSetCookie?: () => string[] };
+  if (typeof h.getSetCookie === "function") {
+    try {
+      const arr = h.getSetCookie();
+      if (arr && arr.length) return arr;
+    } catch {
+      /* fall through */
+    }
+  }
+  const single = res.headers.get("set-cookie") ?? "";
+  if (!single) return [];
+  return single.split(/,(?=\s*[^ =,;]+=)/);
+}
+
+function flattenCookies(setCookieValues: string[]): string {
+  const map = new Map<string, string>();
+  for (const c of setCookieValues) {
+    const [pair] = c.split(";");
+    if (!pair) continue;
+    const [k, ...rest] = pair.trim().split("=");
+    if (!k) continue;
+    map.set(k, rest.join("="));
+  }
+  return Array.from(map.entries())
+    .map(([k, v]) => (v === undefined || v === "" ? k : `${k}=${v}`))
+    .join("; ");
+}
+
 async function getBseCookies(force = false): Promise<string> {
   if (!force && cookieJar && cookieJar.expiresAt > Date.now()) {
     return cookieJar.value;
@@ -35,12 +76,7 @@ async function getBseCookies(force = false): Promise<string> {
       },
       cache: "no-store",
     });
-    const setCookie = res.headers.get("set-cookie") ?? "";
-    const cookie = setCookie
-      .split(/,(?=[^ ])/)
-      .map((c) => c.split(";")[0].trim())
-      .filter(Boolean)
-      .join("; ");
+    const cookie = flattenCookies(readSetCookies(res));
     cookieJar = { value: cookie, expiresAt: Date.now() + COOKIE_TTL_MS };
     return cookie;
   } catch {
@@ -98,23 +134,30 @@ export interface BseSearchHit {
   ISIN_Number?: string;
 }
 
-// BSE has multiple search endpoints with different shapes. We try the most
-// stable one first and fall back if it doesn't return matches.
-export async function searchBseByText(query: string): Promise<BseSearchHit[]> {
-  const trimmed = query.trim();
-  if (!trimmed) return [];
+export interface BseSearchOutcome {
+  hits: BseSearchHit[];
+  error?: string; // populated when both endpoints fail; surfaced to the user
+}
 
-  // 1. Stock_Search — JSON, most stable.
+// BSE has multiple search endpoints with different shapes. We try the most
+// stable one first and fall back if it doesn't return matches. Errors from
+// every attempt are accumulated so the debug panel can show exactly why
+// search failed (HTTP status / non-JSON shape) instead of a generic "0 hits".
+export async function searchBseDetailed(query: string): Promise<BseSearchOutcome> {
+  const trimmed = query.trim();
+  if (!trimmed) return { hits: [] };
+  const errors: string[] = [];
+
   try {
     const url = `https://api.bseindia.com/BseIndiaAPI/api/Stock_Search/w?Type=EQ&text=${encodeURIComponent(trimmed)}`;
     const data = await bseFetchJson<unknown>(url);
     const hits = parseSearchPayload(data);
-    if (hits.length > 0) return hits;
-  } catch {
-    /* fall through */
+    if (hits.length > 0) return { hits };
+    errors.push("Stock_Search returned 0 hits");
+  } catch (e) {
+    errors.push(`Stock_Search: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // 2. PeerSmartSearch — older, sometimes returns HTML or different JSON.
   try {
     const url = `https://api.bseindia.com/BseIndiaAPI/api/PeerSmartSearch/w?Type=SS&text=${encodeURIComponent(trimmed)}`;
     const text = await bseFetchText(url);
@@ -123,15 +166,28 @@ export async function searchBseByText(query: string): Promise<BseSearchHit[]> {
       try {
         const data = JSON.parse(trimmedText);
         const hits = parseSearchPayload(data);
-        if (hits.length > 0) return hits;
+        if (hits.length > 0) return { hits };
+        errors.push("PeerSmartSearch returned 0 hits");
       } catch {
-        /* HTML fallback */
+        const hits = parseHtmlSearchPayload(trimmedText);
+        if (hits.length > 0) return { hits };
+        errors.push("PeerSmartSearch returned non-JSON, no HTML hits parsed");
       }
+    } else {
+      const hits = parseHtmlSearchPayload(trimmedText);
+      if (hits.length > 0) return { hits };
+      errors.push("PeerSmartSearch returned no parseable hits");
     }
-    return parseHtmlSearchPayload(trimmedText);
-  } catch {
-    return [];
+  } catch (e) {
+    errors.push(`PeerSmartSearch: ${e instanceof Error ? e.message : String(e)}`);
   }
+
+  return { hits: [], error: errors.join("; ") };
+}
+
+// Backwards-compatible thin wrapper.
+export async function searchBseByText(query: string): Promise<BseSearchHit[]> {
+  return (await searchBseDetailed(query)).hits;
 }
 
 function parseSearchPayload(data: unknown): BseSearchHit[] {

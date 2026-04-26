@@ -74,7 +74,7 @@ export default function DashboardPage() {
       <SectionNav />
 
       <main className="mx-auto max-w-7xl space-y-6 px-6 py-8">
-        <LivenessBanner hasLive={hasLive} error={error} />
+        <LivenessBanner hasLive={hasLive} error={error} state={state} />
 
         <DebugPanel job={state.lastRefresh} />
 
@@ -100,9 +100,11 @@ export default function DashboardPage() {
 function LivenessBanner({
   hasLive,
   error,
+  state,
 }: {
   hasLive: boolean;
   error: string | null;
+  state: DashboardState;
 }) {
   if (error) {
     return (
@@ -127,13 +129,52 @@ function LivenessBanner({
       </div>
     );
   }
+
+  // Funnel from the latest refresh — surfaces sparsity (0 docs / 0 promises)
+  // immediately so the user knows whether sections E – I are empty because
+  // upstream returned nothing vs. because the company simply has no
+  // forward-looking statements on file.
+  const sourceCount = state.sources.length;
+  const promiseCount = state.promises.length;
+  const extraction = state.lastRefresh?.debug?.extraction;
+  const parsedOk = extraction?.parsedOk ?? 0;
+  const parsedFailed = (extraction?.parsedFailed ?? 0) + (extraction?.skipped ?? 0);
+
+  if (sourceCount === 0) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-warn-100/50 p-4 text-sm text-warn-500">
+        <div className="font-semibold">Live, but no sources discovered</div>
+        <div className="mt-0.5 text-warn-500/90">
+          BSE returned 0 corporate announcements for this scrip code. This
+          usually means BSE is rate-limiting; try refreshing again in a
+          minute. Sections D – I are empty because they're derived from
+          discovered documents.
+        </div>
+      </div>
+    );
+  }
+  if (promiseCount === 0) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-warn-100/50 p-4 text-sm text-warn-500">
+        <div className="font-semibold">Live · no forward-looking statements extracted</div>
+        <div className="mt-0.5 text-warn-500/90">
+          Discovered <strong>{sourceCount}</strong> source(s); parsed{" "}
+          <strong>{parsedOk}</strong> OK, <strong>{parsedFailed}</strong>{" "}
+          failed/skipped; <strong>0</strong> promises found. Sections D – I
+          are empty as a result. Check the Debug panel for per-document
+          parser status.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-emerald-200 bg-ok-100/60 p-4 text-sm text-ok-500">
       <span className="font-semibold">Live:</span>{" "}
       <span className="text-ok-500/90">
-        All sections (A – I) are derived from primary BSE / NSE disclosures —
-        promises, outcomes, scorecard, trend, root causes, red flags and
-        monitor checklist all computed from this company's filings.
+        {sourceCount} source(s) discovered · {parsedOk} parsed · {promiseCount}{" "}
+        promises extracted. Sections A – I are all derived from this company's
+        BSE / NSE filings.
       </span>
     </div>
   );

@@ -1,14 +1,29 @@
 // Fetch a remote document with conservative defaults: short timeout,
 // content-length cap, browser-style headers (BSE/NSE block default UAs).
 
+import { getBseCookieHeader } from "../sources/bse";
+
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
-const DEFAULT_HEADERS: HeadersInit = {
+const DEFAULT_HEADERS: Record<string, string> = {
   "User-Agent": UA,
   Accept: "*/*",
   "Accept-Language": "en-US,en;q=0.9",
 };
+
+async function buildHeaders(url: string, referer?: string): Promise<Record<string, string>> {
+  const base: Record<string, string> = { ...DEFAULT_HEADERS };
+  if (referer) base.Referer = referer;
+  // BSE attachments live on www.bseindia.com behind the same session cookies
+  // as the API. Without the cookie jar these PDFs return 403 and the whole
+  // promise-extraction stage produces zero rows.
+  if (/(?:^|\.)bseindia\.com/i.test(url)) {
+    const cookie = await getBseCookieHeader();
+    if (cookie) base.Cookie = cookie;
+  }
+  return base;
+}
 
 export interface FetchedDoc {
   ok: boolean;
@@ -31,11 +46,10 @@ export async function fetchDocumentBytes(
   const timer = setTimeout(() => ac.abort(), timeoutMs);
 
   try {
+    const headers = await buildHeaders(url, opts.referer);
     const res = await fetch(url, {
       signal: ac.signal,
-      headers: opts.referer
-        ? { ...DEFAULT_HEADERS, Referer: opts.referer }
-        : DEFAULT_HEADERS,
+      headers,
       redirect: "follow",
       cache: "no-store",
     });

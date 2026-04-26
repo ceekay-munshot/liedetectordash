@@ -26,10 +26,26 @@ const HEADERS_API: Record<string, string> = {
 const COOKIE_TTL_MS = 25 * 60 * 1000;
 let cookieJar: { value: string; expiresAt: number } | null = null;
 
-function mergeCookies(existing: string, setHeader: string | null): string {
-  if (!setHeader) return existing;
-  const parsed = setHeader
-    .split(/,(?=[^ ])/)
+// Cloudflare Workers / undici flatten Set-Cookie into a single comma-joined
+// header on `headers.get`, which can drop most of the NSE session jar.
+// Prefer `getSetCookie()` when the runtime exposes it.
+function readSetCookies(res: Response): string[] {
+  const h = res.headers as Headers & { getSetCookie?: () => string[] };
+  if (typeof h.getSetCookie === "function") {
+    try {
+      const arr = h.getSetCookie();
+      if (arr && arr.length) return arr;
+    } catch {
+      /* fall through */
+    }
+  }
+  const single = res.headers.get("set-cookie") ?? "";
+  if (!single) return [];
+  return single.split(/,(?=\s*[^ =,;]+=)/);
+}
+
+function mergeCookies(existing: string, res: Response): string {
+  const parsed = readSetCookies(res)
     .map((c) => c.split(";")[0].trim())
     .filter(Boolean);
   if (parsed.length === 0) return existing;
@@ -55,12 +71,12 @@ async function warmupNseCookies(force = false): Promise<string> {
       headers: HEADERS_BROWSER,
       cache: "no-store",
     });
-    cookies = mergeCookies(cookies, r1.headers.get("set-cookie"));
+    cookies = mergeCookies(cookies, r1);
     const r2 = await fetch("https://www.nseindia.com/market-data/equity-stock-watch", {
       headers: { ...HEADERS_BROWSER, Cookie: cookies },
       cache: "no-store",
     });
-    cookies = mergeCookies(cookies, r2.headers.get("set-cookie"));
+    cookies = mergeCookies(cookies, r2);
     cookieJar = { value: cookies, expiresAt: Date.now() + COOKIE_TTL_MS };
     return cookies;
   } catch {
