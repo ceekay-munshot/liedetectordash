@@ -89,8 +89,8 @@ export default function DashboardPage() {
         <InvestorChecklist items={state.monitorItems} />
 
         <footer className="pt-6 text-center text-[11px] text-ink-400">
-          Sections A · B · C are live (BSE primary). D – I still on mock data.
-          Not investment advice.
+          All sections (A–I) populate from primary disclosures (BSE / NSE) and
+          on-the-fly parsing. Not investment advice.
         </footer>
       </main>
     </div>
@@ -120,8 +120,9 @@ function LivenessBanner({
       <div className="rounded-2xl border border-amber-200 bg-warn-100/50 p-4 text-sm text-warn-500">
         <span className="font-semibold">Sample data shown.</span>{" "}
         <span className="text-warn-500/90">
-          Enter a company / ticker and click Refresh to load live data for
-          sections A, B, C, D from BSE/NSE plus on-the-fly PDF extraction.
+          Enter a company / ticker and click Refresh to pull live data for
+          every section (A – I) from BSE / NSE primary disclosures plus
+          on-the-fly PDF extraction and rule-based outcome testing.
         </span>
       </div>
     );
@@ -130,8 +131,9 @@ function LivenessBanner({
     <div className="rounded-2xl border border-emerald-200 bg-ok-100/60 p-4 text-sm text-ok-500">
       <span className="font-semibold">Live:</span>{" "}
       <span className="text-ok-500/90">
-        Sections A · B · C · D are populated from primary sources and
-        rule-based extraction. Sections E – I still use mock data in this step.
+        All sections (A – I) are derived from primary BSE / NSE disclosures —
+        promises, outcomes, scorecard, trend, root causes, red flags and
+        monitor checklist all computed from this company's filings.
       </span>
     </div>
   );

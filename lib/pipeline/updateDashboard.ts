@@ -7,14 +7,10 @@ import type {
   RefreshJob,
   SourceDocument,
 } from "../types";
-import {
-  mockConflicts,
-  mockDashboardState,
-  mockMonitor,
-  mockRedFlags,
-  mockRootCauses,
-  mockTrend,
-} from "../mockData";
+import { computeTrend } from "../insights/trend";
+import { computeRootCauseClusters } from "../insights/rootCauses";
+import { detectRedFlags } from "../insights/redFlags";
+import { computeMonitorItems } from "../insights/monitorItems";
 
 export interface UpdateDashboardInput {
   company: CompanyProfile;
@@ -25,12 +21,19 @@ export interface UpdateDashboardInput {
   lastRefresh?: RefreshJob;
 }
 
-// Stage 7: Assemble the dashboard state.
-//   A · Company  -> live (input.company)
-//   B · Sources  -> live (input.sources)
-//   C · Gaps     -> live (input.gaps)
-//   D · Promises -> live (input.promises)
-//   E - I        -> still mock (intentional, per the staged plan).
+// Stage 7: Assemble the dashboard state. Every section is now derived from
+// live inputs:
+//   A · Company       -> input.company
+//   B · Sources       -> input.sources
+//   C · Gaps          -> input.gaps
+//   D · Promises      -> input.promises (status / variance / explanation
+//                        already populated upstream by the outcome-testing
+//                        pass inside /api/extract-promises)
+//   E · Scorecard     -> input.scorecard (computed from tested promises)
+//   F · Trend         -> per-quarter scorecards from input.promises
+//   G · Root causes   -> clustered from rootCauseTags on input.promises
+//   H · Red flags     -> heuristics over input.promises
+//   I · Monitor list  -> derived from active (Pending / In-progress) promises
 export async function updateDashboard(
   input: UpdateDashboardInput,
 ): Promise<DashboardState> {
@@ -39,12 +42,12 @@ export async function updateDashboard(
     sources: input.sources,
     gaps: input.gaps,
     promises: input.promises,
-    scorecard: mockDashboardState.scorecard,
-    trend: mockTrend,
-    rootCauses: mockRootCauses,
-    redFlags: mockRedFlags,
-    monitorItems: mockMonitor,
-    conflicts: mockConflicts,
+    scorecard: input.scorecard,
+    trend: computeTrend(input.promises),
+    rootCauses: computeRootCauseClusters(input.promises),
+    redFlags: detectRedFlags(input.promises),
+    monitorItems: computeMonitorItems(input.promises),
+    conflicts: [],
     lastRefresh: input.lastRefresh,
   };
 }
