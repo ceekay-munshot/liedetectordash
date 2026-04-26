@@ -9,7 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "postinstall": "if [ \"$CI\" = \"true\" ]; then npx opennextjs-cloudflare build; else echo 'skip postinstall opennext build (set CI=true to enable)'; fi"
   },
   "dependencies": {
     "next": "14.2.35",
