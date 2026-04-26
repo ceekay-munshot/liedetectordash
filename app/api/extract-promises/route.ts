@@ -8,6 +8,7 @@ import type {
 import { parseDocument } from "@/lib/parsers";
 import { extractPromisesFromText, priorityOf } from "@/lib/extractors/extract";
 import { dedupePromises } from "@/lib/extractors/dedupe";
+import { testPromiseOutcomes, type ParsedSourceText } from "@/lib/outcomes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,6 +57,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const parsedDocs: ParsedDocSummary[] = [];
   const allPromises: PromiseRecord[] = [];
+  const parsedTexts: ParsedSourceText[] = [];
 
   for (const source of ordered) {
     if (Date.now() - startedAt > PARSE_BUDGET_MS) {
@@ -104,6 +106,10 @@ export async function POST(req: Request): Promise<NextResponse> {
       continue;
     }
 
+    // Keep the parsed text around so we can match later-period actuals
+    // against earlier promises in the outcome-testing pass below.
+    parsedTexts.push({ source, text: parsed.text });
+
     const { promises } = extractPromisesFromText(parsed.text, source);
     if (promises.length === 0) debug.docsWithZeroPromises++;
     for (const p of promises) {
@@ -113,8 +119,15 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   const deduped = dedupePromises(allPromises);
-  debug.promisesExtracted = deduped.length;
+
+  // Outcome testing: for every promise, look for an "actual" reading in any
+  // later-period source we already parsed. This populates status, variancePct,
+  // actualOutcome, managementExplanation, rootCauseTags. If no actual is
+  // found we fall back to Pending / In-progress based on test date.
+  const tested = testPromiseOutcomes(deduped, parsedTexts);
+
+  debug.promisesExtracted = tested.length;
   debug.durationMs = Date.now() - startedAt;
 
-  return NextResponse.json({ promises: deduped, parsedDocs, debug });
+  return NextResponse.json({ promises: tested, parsedDocs, debug });
 }

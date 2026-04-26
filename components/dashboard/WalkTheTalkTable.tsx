@@ -103,7 +103,7 @@ export function WalkTheTalkTable({ promises }: { promises: PromiseRecord[] }) {
       id="walk-the-talk"
       eyebrow="D · Walk-the-Talk Tracking"
       title="Chronological promise vs. outcome ledger"
-      subtitle="Every commitment, its verbatim source, the test, and the result. Outcome / status / variance / explanation columns are next-step work."
+      subtitle="Every commitment, its verbatim source, the test, and the actual outcome — matched against later filings."
       actions={
         <div className="flex items-center gap-2">
           <Badge tone="ok">Live</Badge>

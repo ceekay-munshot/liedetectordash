@@ -36,9 +36,15 @@ function makeStage(stage: RefreshStage): RefreshStageState {
   return { stage, status: "pending" };
 }
 
-// End-to-end refresh. Stages 1, 2, 3, 4 are live; stages 5 and 6 (testOutcomes,
-// computeScore) still operate on the freshly-extracted promises but produce a
-// pending-only scorecard since outcomes have not been verified yet.
+// End-to-end refresh. All seven stages are live:
+//   1 resolveCompany      — BSE/NSE lookup
+//   2 fetchDocuments      — BSE corporate announcements + gap analysis
+//   3 parseDocuments      — visibility pass-through (real parsing happens in 4)
+//   4 extractPromises     — server-side: parse PDFs/HTML, regex extraction,
+//                           and inline outcome testing against later filings
+//   5 testOutcomes        — date-based fallback for anything still Pending
+//   6 computeScore        — credibility scorecard from tested promises
+//   7 updateDashboard     — derive trend, root causes, red flags, monitor items
 export async function runRefresh(
   input: RunRefreshInput,
   onProgress?: (job: RefreshJob) => void,
@@ -130,7 +136,10 @@ export async function runRefresh(
     return r;
   });
 
-  // Stages 5/6 are still mock-equivalent: all extracted promises stay Pending.
+  // Stage 5: most outcome-testing already happened inside extract-promises
+  // (where the parsed text is in memory). This stage is a thin pass that
+  // promotes any leftover "Pending" promises whose test date has passed to
+  // "In-progress" for honest visibility.
   const tested = await run("testOutcomes", () => testOutcomes(promises));
   const scorecard = await run("computeScore", () => computeScore(tested));
 
