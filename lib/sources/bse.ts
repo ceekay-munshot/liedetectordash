@@ -21,6 +21,47 @@ const BROWSER_HEADERS: Record<string, string> = {
 const COOKIE_TTL_MS = 25 * 60 * 1000;
 let cookieJar: { value: string; expiresAt: number } | null = null;
 
+// Used by the document parser when it fetches BSE-hosted PDF attachments —
+// those URLs (www.bseindia.com/xml-data/corpfiling/AttachLive/…) are blocked
+// without a valid session, exactly like the JSON API endpoints.
+export async function getBseCookieHeader(): Promise<string> {
+  return getBseCookies();
+}
+
+// Read every Set-Cookie header value off a Response. On Cloudflare Workers
+// (and undici-based fetch in Node 18+) `headers.get("set-cookie")` only
+// returns the first one, which loses most of the BSE/NSE session jar; use
+// `getSetCookie()` when available and fall back to the comma-split heuristic
+// for older runtimes.
+function readSetCookies(res: Response): string[] {
+  const h = res.headers as Headers & { getSetCookie?: () => string[] };
+  if (typeof h.getSetCookie === "function") {
+    try {
+      const arr = h.getSetCookie();
+      if (arr && arr.length) return arr;
+    } catch {
+      /* fall through */
+    }
+  }
+  const single = res.headers.get("set-cookie") ?? "";
+  if (!single) return [];
+  return single.split(/,(?=\s*[^ =,;]+=)/);
+}
+
+function flattenCookies(setCookieValues: string[]): string {
+  const map = new Map<string, string>();
+  for (const c of setCookieValues) {
+    const [pair] = c.split(";");
+    if (!pair) continue;
+    const [k, ...rest] = pair.trim().split("=");
+    if (!k) continue;
+    map.set(k, rest.join("="));
+  }
+  return Array.from(map.entries())
+    .map(([k, v]) => (v === undefined || v === "" ? k : `${k}=${v}`))
+    .join("; ");
+}
+
 async function getBseCookies(force = false): Promise<string> {
   if (!force && cookieJar && cookieJar.expiresAt > Date.now()) {
     return cookieJar.value;
@@ -35,12 +76,7 @@ async function getBseCookies(force = false): Promise<string> {
       },
       cache: "no-store",
     });
-    const setCookie = res.headers.get("set-cookie") ?? "";
-    const cookie = setCookie
-      .split(/,(?=[^ ])/)
-      .map((c) => c.split(";")[0].trim())
-      .filter(Boolean)
-      .join("; ");
+    const cookie = flattenCookies(readSetCookies(res));
     cookieJar = { value: cookie, expiresAt: Date.now() + COOKIE_TTL_MS };
     return cookie;
   } catch {
