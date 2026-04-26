@@ -134,23 +134,30 @@ export interface BseSearchHit {
   ISIN_Number?: string;
 }
 
-// BSE has multiple search endpoints with different shapes. We try the most
-// stable one first and fall back if it doesn't return matches.
-export async function searchBseByText(query: string): Promise<BseSearchHit[]> {
-  const trimmed = query.trim();
-  if (!trimmed) return [];
+export interface BseSearchOutcome {
+  hits: BseSearchHit[];
+  error?: string; // populated when both endpoints fail; surfaced to the user
+}
 
-  // 1. Stock_Search — JSON, most stable.
+// BSE has multiple search endpoints with different shapes. We try the most
+// stable one first and fall back if it doesn't return matches. Errors from
+// every attempt are accumulated so the debug panel can show exactly why
+// search failed (HTTP status / non-JSON shape) instead of a generic "0 hits".
+export async function searchBseDetailed(query: string): Promise<BseSearchOutcome> {
+  const trimmed = query.trim();
+  if (!trimmed) return { hits: [] };
+  const errors: string[] = [];
+
   try {
     const url = `https://api.bseindia.com/BseIndiaAPI/api/Stock_Search/w?Type=EQ&text=${encodeURIComponent(trimmed)}`;
     const data = await bseFetchJson<unknown>(url);
     const hits = parseSearchPayload(data);
-    if (hits.length > 0) return hits;
-  } catch {
-    /* fall through */
+    if (hits.length > 0) return { hits };
+    errors.push("Stock_Search returned 0 hits");
+  } catch (e) {
+    errors.push(`Stock_Search: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // 2. PeerSmartSearch — older, sometimes returns HTML or different JSON.
   try {
     const url = `https://api.bseindia.com/BseIndiaAPI/api/PeerSmartSearch/w?Type=SS&text=${encodeURIComponent(trimmed)}`;
     const text = await bseFetchText(url);
@@ -159,15 +166,28 @@ export async function searchBseByText(query: string): Promise<BseSearchHit[]> {
       try {
         const data = JSON.parse(trimmedText);
         const hits = parseSearchPayload(data);
-        if (hits.length > 0) return hits;
+        if (hits.length > 0) return { hits };
+        errors.push("PeerSmartSearch returned 0 hits");
       } catch {
-        /* HTML fallback */
+        const hits = parseHtmlSearchPayload(trimmedText);
+        if (hits.length > 0) return { hits };
+        errors.push("PeerSmartSearch returned non-JSON, no HTML hits parsed");
       }
+    } else {
+      const hits = parseHtmlSearchPayload(trimmedText);
+      if (hits.length > 0) return { hits };
+      errors.push("PeerSmartSearch returned no parseable hits");
     }
-    return parseHtmlSearchPayload(trimmedText);
-  } catch {
-    return [];
+  } catch (e) {
+    errors.push(`PeerSmartSearch: ${e instanceof Error ? e.message : String(e)}`);
   }
+
+  return { hits: [], error: errors.join("; ") };
+}
+
+// Backwards-compatible thin wrapper.
+export async function searchBseByText(query: string): Promise<BseSearchHit[]> {
+  return (await searchBseDetailed(query)).hits;
 }
 
 function parseSearchPayload(data: unknown): BseSearchHit[] {
