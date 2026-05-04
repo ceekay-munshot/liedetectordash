@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import type { CompanyProfile } from "@/lib/types";
 import { formatRelative } from "@/lib/utils";
+import { MunsAnalysisPanel } from "@/components/dashboard/MunsAnalysisPanel";
 
 export interface DashboardQuery {
   company: string;
@@ -65,6 +66,7 @@ export function DashboardHeader({
                 {formatRelative(lastUpdated)}
               </div>
             </div>
+            <MunsAnalysisPanel ticker={ticker} company={name} />
             <Button
               onClick={() => onRefresh({ company: name, ticker, fiscalYear })}
               disabled={isRefreshing}
