@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/Select";
 import type { CompanyProfile } from "@/lib/types";
 import { formatRelative } from "@/lib/utils";
 import { MunsAnalysisPanel } from "@/components/dashboard/MunsAnalysisPanel";
+import { CompanySearchInput } from "@/components/dashboard/CompanySearchInput";
 
 export interface DashboardQuery {
   company: string;
@@ -90,17 +91,20 @@ export function DashboardHeader({
           }}
           className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
         >
-          <Input
-            name="company"
+          <CompanySearchInput
             label="Company"
-            placeholder="e.g., Acme Bharat Industries Ltd."
+            placeholder="e.g., Reliance Industries"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={setName}
+            onSelect={(entry) => {
+              setName(entry.name);
+              setTicker(entry.ticker.toUpperCase());
+            }}
           />
           <Input
             name="ticker"
             label="Ticker"
-            placeholder="e.g., ACMEIN"
+            placeholder="e.g., RELIANCE"
             value={ticker}
             onChange={(e) => setTicker(e.target.value.toUpperCase())}
           />

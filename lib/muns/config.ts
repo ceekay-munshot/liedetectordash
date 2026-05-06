@@ -6,3 +6,9 @@ export const MUNS_ACCESS_TOKEN =
 export const MUNS_AGENT_LIBRARY_ID = "613aa071-2079-40a8-bf9f-f9f8af448c20";
 
 export const MUNS_API_BASE = "https://devde.muns.io";
+
+// Birdnest is the public-facing search service for MUNS-indexed tickers.
+// Swap the bearer token here when it expires.
+export const BIRDNEST_API_BASE = "https://birdnest.muns.io";
+
+export const MUNS_BEARER_TOKEN = MUNS_ACCESS_TOKEN;
