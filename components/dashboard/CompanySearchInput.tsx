@@ -143,7 +143,7 @@ export function CompanySearchInput({
       </label>
 
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-xl border border-ink-200 bg-white shadow-card">
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border border-ink-200 bg-white shadow-card">
           {loading && (
             <div className="px-3 py-2 text-xs text-ink-500">Searching…</div>
           )}
