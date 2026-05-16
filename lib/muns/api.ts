@@ -30,7 +30,7 @@ export const runMunsAgent = async (
   const response = await fetch(`${MUNS_API_BASE}/agents/run`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${getMunsAccessToken()}`,
+      Authorization: `Bearer ${await getMunsAccessToken()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

@@ -67,7 +67,7 @@ export const searchBirdnest = async (
   const response = await fetch(`${BIRDNEST_API_BASE}/stock/search`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${getMunsAccessToken()}`,
+      Authorization: `Bearer ${await getMunsAccessToken()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ query: trimmed, user_index: MUNS_USER_INDEX }),
