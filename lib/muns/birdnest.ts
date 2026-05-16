@@ -1,4 +1,8 @@
-import { BIRDNEST_API_BASE, MUNS_BEARER_TOKEN } from "./config";
+import {
+  BIRDNEST_API_BASE,
+  MUNS_USER_INDEX,
+  getMunsAccessToken,
+} from "./config";
 
 // Birdnest returns a map keyed by ticker, with [country, name, industry] tuples.
 export type BirdnestRawResponse = {
@@ -63,10 +67,10 @@ export const searchBirdnest = async (
   const response = await fetch(`${BIRDNEST_API_BASE}/stock/search`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${MUNS_BEARER_TOKEN}`,
+      Authorization: `Bearer ${getMunsAccessToken()}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query: trimmed }),
+    body: JSON.stringify({ query: trimmed, user_index: MUNS_USER_INDEX }),
     signal,
   });
 

@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { runMunsAgent } from "@/lib/muns/api";
+import type { RunMunsAgentInput, RunMunsAgentResult } from "@/lib/muns/api";
 import {
   parseMunsResponse,
   type MunsParsedResponse,
@@ -11,6 +11,28 @@ import {
   type MunsTable,
 } from "@/lib/muns/parse";
 import { cn } from "@/lib/utils";
+
+const runMunsAgent = async (
+  input: RunMunsAgentInput,
+): Promise<RunMunsAgentResult> => {
+  const response = await fetch("/api/muns/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    let message = `MUNS request failed (${response.status})`;
+    try {
+      const parsed = JSON.parse(text) as { error?: string };
+      if (parsed.error) message = parsed.error;
+    } catch {
+      if (text) message = `${message}: ${text.slice(0, 200)}`;
+    }
+    throw new Error(message);
+  }
+  return JSON.parse(text) as RunMunsAgentResult;
+};
 
 interface MunsAnalysisPanelProps {
   ticker: string;

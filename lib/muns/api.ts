@@ -1,7 +1,8 @@
 import {
-  MUNS_ACCESS_TOKEN,
   MUNS_AGENT_LIBRARY_ID,
   MUNS_API_BASE,
+  MUNS_USER_INDEX,
+  getMunsAccessToken,
 } from "./config";
 
 export interface RunMunsAgentInput {
@@ -29,11 +30,12 @@ export const runMunsAgent = async (
   const response = await fetch(`${MUNS_API_BASE}/agents/run`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${MUNS_ACCESS_TOKEN}`,
+      Authorization: `Bearer ${getMunsAccessToken()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       agent_library_id: MUNS_AGENT_LIBRARY_ID,
+      user_index: MUNS_USER_INDEX,
       metadata: {
         stock_ticker: ticker,
         stock_company_name: company,
