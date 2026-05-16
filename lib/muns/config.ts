@@ -9,24 +9,35 @@ export const BIRDNEST_API_BASE = "https://birdnest.muns.io";
 
 export const MUNS_USER_INDEX = 124;
 
-// On Cloudflare Workers, secrets set via `wrangler secret put` (or the
-// dashboard) are only exposed on the Worker `env` binding — they are NOT
-// mirrored into `process.env`. OpenNext surfaces that binding through
-// `getCloudflareContext().env`. For local `next dev`, that helper throws,
-// so we fall back to `process.env` (use `.env.local`).
-export const getMunsAccessToken = (): string => {
-  let token: string | undefined;
+// Resolves the MUNS access token at request time. Cloudflare exposes
+// secrets only through the Worker `env` binding (not via process.env on
+// every adapter), so try the binding first (sync, then async fallback)
+// and fall back to `process.env` for local `next dev`.
+export const getMunsAccessToken = async (): Promise<string> => {
+  const key = "MUNS_ACCESS_TOKEN";
+
+  if (typeof process.env[key] === "string" && process.env[key]) {
+    return process.env[key] as string;
+  }
+
   try {
-    const env = getCloudflareContext().env as { MUNS_ACCESS_TOKEN?: string };
-    token = env?.MUNS_ACCESS_TOKEN;
+    const env = getCloudflareContext().env as Record<string, unknown>;
+    const val = env?.[key];
+    if (typeof val === "string" && val) return val;
   } catch {
-    // Not running inside a Cloudflare request context.
+    // sync context not available — fall through
   }
-  if (!token) token = process.env.MUNS_ACCESS_TOKEN;
-  if (!token) {
-    throw new Error(
-      "MUNS_ACCESS_TOKEN is not set. Add it via `wrangler secret put MUNS_ACCESS_TOKEN` (Cloudflare) or .env.local (local dev).",
-    );
+
+  try {
+    const env = (await getCloudflareContext({ async: true }))
+      .env as Record<string, unknown>;
+    const val = env?.[key];
+    if (typeof val === "string" && val) return val;
+  } catch {
+    // async context not available — fall through
   }
-  return token;
+
+  throw new Error(
+    "MUNS_ACCESS_TOKEN is not set. Add it via `wrangler secret put MUNS_ACCESS_TOKEN` (Cloudflare) or .env.local (local dev).",
+  );
 };
